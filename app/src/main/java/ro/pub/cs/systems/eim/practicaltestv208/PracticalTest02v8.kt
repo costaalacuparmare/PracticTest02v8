@@ -28,17 +28,9 @@ import java.net.HttpURLConnection
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URL
-import java.util.concurrent.ConcurrentHashMap
-
-// --- Data Model for Caching ---
-data class NetworkData(
-    val content: String,
-    val timestamp: Long = System.currentTimeMillis()
-)
 
 class MainActivity : ComponentActivity() {
     private var serverThread: ServerThread? = null
-    private val cache = ConcurrentHashMap<String, NetworkData>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,7 +41,7 @@ class MainActivity : ComponentActivity() {
                     MainScreen(
                         modifier = Modifier.padding(innerPadding),
                         onStartServer = { port ->
-                            serverThread = ServerThread(port.toInt(), cache)
+                            serverThread = ServerThread(port.toInt())
                             serverThread?.start()
                         },
                         onStopServer = {
@@ -72,7 +64,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // Server Implementation
-class ServerThread(private val port: Int, private val cache: ConcurrentHashMap<String, NetworkData>) : Thread() {
+class ServerThread(private val port: Int) : Thread() {
     private var serverSocket: ServerSocket? = null
 
     override fun run() {
@@ -81,7 +73,7 @@ class ServerThread(private val port: Int, private val cache: ConcurrentHashMap<S
             Log.i("Server", "Firewall Server started on port $port")
             while (!isInterrupted) {
                 val socket = serverSocket?.accept() ?: break
-                CommunicationThread(socket, cache).start()
+                CommunicationThread(socket).start()
             }
         } catch (e: Exception) {
             Log.e("Server", "Error: ${e.message}")
@@ -98,7 +90,7 @@ class ServerThread(private val port: Int, private val cache: ConcurrentHashMap<S
     }
 }
 
-class CommunicationThread(private val socket: Socket, private val cache: ConcurrentHashMap<String, NetworkData>) : Thread() {
+class CommunicationThread(private val socket: Socket) : Thread() {
     override fun run() {
         try {
             val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
@@ -112,13 +104,8 @@ class CommunicationThread(private val socket: Socket, private val cache: Concurr
                 val response = if (requestedUrl.contains("bad", ignoreCase = true)) {
                     "URL blocked by firewall"
                 } else {
-                    var data = cache[requestedUrl]
-                    if (data == null) {
-                        val result = fetchUrlContent(requestedUrl)
-                        data = NetworkData(result)
-                        cache[requestedUrl] = data
-                    }
-                    data.content
+                    // Fetch content directly without caching
+                    fetchUrlContent(requestedUrl)
                 }
 
                 writer.println(response)
